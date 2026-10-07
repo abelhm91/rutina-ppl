@@ -171,7 +171,50 @@ function nutrition(p=P){
     strength:"Peso estable o subiendo muy despacio",
     health:"Mantener el peso"
   })[p.goal];
-  return { tdee:Math.round(tdee/50)*50, kcal, pg, fg, cg, steps, pace, bmi:bmi.toFixed(1).replace('.',',') };
+  return { bmr:Math.round(bmr/50)*50, tdee:Math.round(tdee/50)*50, kcal, pg, fg, cg, steps, pace, bmi:bmi.toFixed(1).replace('.',',') };
+}
+
+
+/* Qué hacer si no avanzas, según el objetivo, con las calorías ya calculadas */
+function adjustRules(n=nutrition()){
+  const k=n.kcal, floor=n.bmr;
+  const down=`${es(Math.max(floor,k-200))}–${es(Math.max(floor,k-150))} kcal`, up=`${es(k+150)}–${es(k+200)} kcal`;
+  const lose=`${(P.weight*0.01).toFixed(1).replace('.',',')} kg`;
+  const R = {
+    fat:[
+      {ok:true, when:'El peso y la cintura bajan poco a poco', act:'Vas bien. No cambies nada.'},
+      {when:'En 2–3 semanas no bajan ni el peso ni la cintura', act:'Come menos', kcal:down},
+      {when:`Bajas más de ${lose} por semana o pierdes fuerza`, act:'Come más', kcal:up}
+    ],
+    recomp:[
+      {ok:true, when:'La cintura baja, aunque el peso no cambie', act:'Vas bien: pierdes grasa y ganas músculo. No cambies nada.'},
+      {when:'En 2–3 semanas no bajan ni la cintura ni el peso', act:'Come menos', kcal:down},
+      {when:'Bajas más de 0,5 kg por semana y pierdes fuerza', act:'Come más', kcal:up}
+    ],
+    muscle:[
+      {ok:true, when:'El peso sube despacio y la cintura casi no cambia', act:'Vas bien. No cambies nada.'},
+      {when:'En 2–3 semanas el peso no sube', act:'Come más', kcal:up},
+      {when:'Subes más de 0,5 kg por semana o la cintura crece rápido', act:'Come menos', kcal:down}
+    ],
+    strength:[
+      {ok:true, when:'Levantas más y el peso está estable', act:'Vas bien. No cambies nada.'},
+      {when:'Te estancas en fuerza y el peso baja', act:'Come más', kcal:up},
+      {when:'El peso sube rápido y la cintura crece', act:'Come menos', kcal:down}
+    ],
+    health:[
+      {ok:true, when:'El peso se mantiene estable', act:'Vas bien. No cambies nada.'},
+      {when:'El peso sube 2–3 semanas seguidas', act:'Come menos', kcal:down},
+      {when:'El peso baja 2–3 semanas seguidas sin buscarlo', act:'Come más', kcal:up}
+    ]
+  };
+  return R[P.goal];
+}
+function adjustHtml(n=nutrition()){
+  return `<div class="adj">
+    <div class="adj-h"><b>Revisa cada 2 semanas</b><small>Pésate y mide la cintura por la mañana, en ayunas y en las mismas condiciones. Ahora comes ${es(n.kcal)} kcal.</small></div>
+    ${adjustRules(n).map(r=>`<div class="adj-r ${r.ok?'ok':r.act==='Come más'?'up':'down'}"><span class="adj-i" aria-hidden="true">${r.ok?'✓':r.act==='Come más'?'+':'−'}</span><div><small>${esc(r.when)}</small><b>${esc(r.act)}${r.kcal?`: <span class="adj-k">${r.kcal}</span>`:''}</b></div></div>`).join('')}
+    <p class="adj-f">Quita o añade las calorías de grasas o hidratos, nunca de la proteína. 150–200 kcal son, por ejemplo, 1 cucharada y media de aceite, 2 rebanadas de pan o un puñado de frutos secos. Haz un cambio cada vez y espera otras 2–3 semanas. No bajes de ${es(n.bmr)} kcal.</p>
+  </div>`;
 }
 
 /* ================= Navegación y vistas ================= */
@@ -285,9 +328,8 @@ function renderProfile(m){
       <div class="stat"><span class="lbl">Hidratos</span><span class="big">${n.cg} <small>g</small></span><p>Más cerca del entrenamiento.</p></div>
       <div class="stat"><span class="lbl">Pasos</span><span class="big">${es(n.steps)}</span><p>Al día, además de entrenar.</p></div>
     </div>
+    ${adjustHtml(n)}
     <ul class="rules">
-      <li><b>Ajusta cada 2–3 semanas</b><span>Si el peso y la cintura no van en la dirección de tu objetivo, cambia 150–200 kcal.</span></li>
-      <li><b>Mide la cintura</b><span>Cada 2 semanas a la altura del ombligo, en ayunas.</span></li>
       <li><b>Duerme 7–8 horas</b><span>Dormir poco aumenta el hambre y frena la recuperación.</span></li>
     </ul>
     <p class="note">Las calorías son una estimación con la fórmula de Mifflin-St Jeor. Si tienes alguna lesión o problema de salud, consulta antes con un profesional.</p>
@@ -607,7 +649,8 @@ function guideSlides(){
     {lbl:'Paso 6', title:'Tu alimentación', body:`
       <p>El entrenamiento construye; la comida decide si ganas músculo o pierdes grasa.</p>
       <div class="g-nut"><div><span class="lbl">Calorías</span><b>${es(n.kcal)}</b><small>kcal al día</small></div><div><span class="lbl">Proteína</span><b>${n.pg} g</b><small>al día</small></div><div><span class="lbl">Pasos</span><b>${es(n.steps)}</b><small>al día</small></div></div>
-      <ul class="plain"><li><b>Objetivo:</b> ${esc(n.pace.charAt(0).toLowerCase()+n.pace.slice(1))}.</li><li><b>Mide la cintura</b> cada 2 semanas, en ayunas, a la altura del ombligo.</li><li>Si en 2–3 semanas no avanzas, ajusta 150–200 kcal.</li><li><b>Duerme 7–8 horas.</b> Sin descanso no hay progreso.</li></ul>
+      <ul class="plain"><li><b>Objetivo:</b> ${esc(n.pace.charAt(0).toLowerCase()+n.pace.slice(1))}.</li><li><b>Duerme 7–8 horas.</b> Sin descanso no hay progreso.</li></ul>
+      ${adjustHtml(n)}
       <p class="g-note">Todo esto lo tienes siempre en tu perfil, en "Cómo funciona tu plan".</p>`}
   ];
 }

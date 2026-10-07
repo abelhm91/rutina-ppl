@@ -1,5 +1,5 @@
 // Guarda la app para que funcione sin conexión en el gimnasio.
-const CACHE = 'rutina-ppl-v7';
+const CACHE = 'rutina-ppl-v8';
 const CORE = ['./', './index.html', './js/app.js', './js/library.js', './manifest.webmanifest', './icons/icon-192.png', './icons/icon-512.png', './icons/maskable-512.png'];
 
 self.addEventListener('install', e => {

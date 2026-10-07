@@ -453,7 +453,7 @@ $('onbNext').addEventListener('click', ()=>{
 function closeOnboarding(){ $('onb').hidden=true; document.body.classList.remove('lock'); }
 
 /* ================= Entrenamiento ================= */
-let tickT=null, wake=null, restEnd=null;
+let tickT=null, wake=null;
 async function keepAwake(){ try{ if(navigator.wakeLock) wake=await navigator.wakeLock.request('screen'); }catch(e){ wake=null; } }
 document.addEventListener('visibilitychange', ()=>{ if(training && !$('train').hidden && document.visibilityState==='visible') keepAwake(); });
 const saveTraining = () => store.set('ppl-training', training);
@@ -475,11 +475,13 @@ function openTrain(){
   tr.style.setProperty('--day',`var(--${s.c})`); tr.className='train '+s.c; tr.hidden=false;
   $('tDay').textContent='Entrenando · '+s.name;
   renderTrainList(); updTrain();
-  clearInterval(tickT); tickT=setInterval(()=>{ updTimer(); tickRest(); },1000); updTimer(); keepAwake();
+  restEnd = training.restEnd || null; restAlerted = !!(restEnd && restEnd<Date.now());
+  if(restEnd) showRestBar(); else $('restbar').hidden=true;
+  clearInterval(tickT); tickT=setInterval(()=>{ updTimer(); tickRest(); },500); updTimer(); tickRest(); keepAwake();
   document.body.classList.add('lock');
   requestAnimationFrame(()=>scrollToCurrent(false));
 }
-function closeTrain(){ $('train').hidden=true; clearInterval(tickT); hideRest(); try{ wake&&wake.release(); }catch(e){} wake=null; document.body.classList.remove('lock'); render(); }
+function closeTrain(){ $('train').hidden=true; clearInterval(tickT); $('restbar').hidden=true; try{ wake&&wake.release(); }catch(e){} wake=null; document.body.classList.remove('lock'); render(); }
 function updTimer(){ if(training) $('tTime').textContent=fmt((Date.now()-training.start)/1000); }
 const currentIdx = () => training.sets.findIndex(arr=>arr.some(s=>!s.done));
 function updTrain(){
@@ -520,6 +522,7 @@ $('tList').addEventListener('input', e=>{
 });
 $('tList').addEventListener('click', e=>{
   const tick=e.target.closest('.tick'); if(!tick) return;
+  unlockAudio();
   const row=tick.closest('.set'), i=+tick.closest('.tex').dataset.i, j=+row.dataset.j;
   const sets=training.sets[i], s=sets[j]; s.done=!s.done;
   if(s.done){
@@ -553,17 +556,46 @@ $('tMin').addEventListener('click', closeTrain);
 $('tEnd').addEventListener('click', finishSheet);
 
 function restSecs(t){ const n=parseFloat(String(t).replace(',','.')); return (isNaN(n)?1.5:n)*60; }
-function startRest(t){ restEnd=Date.now()+restSecs(t)*1000; const rb=$('restbar'); rb.hidden=false; rb.className='restbar'+(training.sess.c==='legs'?' legs':''); tickRest(); }
-function hideRest(){ restEnd=null; $('restbar').hidden=true; }
+/* El descanso se guarda con el entrenamiento: sobrevive a minimizar, bloquear la pantalla o cerrar la app */
+let restEnd=null, restAlerted=false, actx=null;
+function unlockAudio(){ try{ if(!actx){ const A=window.AudioContext||window.webkitAudioContext; if(A) actx=new A(); } if(actx&&actx.state==='suspended') actx.resume(); }catch(e){} }
+function beep(times=3){
+  try{ if(!actx) return; const t0=actx.currentTime;
+    for(let i=0;i<times;i++){ const o=actx.createOscillator(), g=actx.createGain(); o.type='sine'; o.frequency.value=i===times-1?1320:880;
+      g.gain.setValueAtTime(0.0001,t0+i*0.35); g.gain.exponentialRampToValueAtTime(0.4,t0+i*0.35+0.02); g.gain.exponentialRampToValueAtTime(0.0001,t0+i*0.35+0.25);
+      o.connect(g).connect(actx.destination); o.start(t0+i*0.35); o.stop(t0+i*0.35+0.3); }
+  }catch(e){}
+}
+function showRestBar(){ const rb=$('restbar'); rb.hidden=false; rb.className='restbar'+(training.sess.c==='legs'?' legs':''); }
+function startRest(t){
+  unlockAudio();
+  restEnd=Date.now()+restSecs(t)*1000; restAlerted=false;
+  training.restEnd=restEnd; saveTraining();
+  showRestBar(); tickRest();
+}
+function hideRest(){ restEnd=null; restAlerted=false; if(training){ training.restEnd=null; saveTraining(); } $('restbar').hidden=true; }
 function tickRest(){
   if(!restEnd) return; const left=(restEnd-Date.now())/1000, rb=$('restbar');
-  $('rbTime').textContent = left>0 ? fmt(left).replace(/^0/,'') : '¡Vamos!';
-  if(left<=0 && !rb.classList.contains('over')){ rb.classList.add('over'); try{ navigator.vibrate&&navigator.vibrate([200,100,200]); }catch(e){} }
-  if(left<-20) hideRest();
+  if(rb.hidden && training && !$('train').hidden) showRestBar();
+  if(left>0){
+    rb.classList.remove('over');
+    $('rbTime').textContent = fmt(left).replace(/^0/,'');
+    $('rbLbl').textContent = 'Descanso';
+    if(left<=3.05 && left>2 && !restAlerted){ /* aviso suave a falta de 3 s */ }
+  } else {
+    if(!restAlerted){
+      restAlerted=true; rb.classList.add('over');
+      if(document.visibilityState==='visible'){ beep(3); try{ navigator.vibrate&&navigator.vibrate([250,120,250,120,400]); }catch(e){} }
+    }
+    $('rbLbl').textContent = '¡Siguiente serie!';
+    $('rbTime').textContent = '+'+fmt(-left).replace(/^0/,'');
+    if(left<-600) hideRest();   // a los 10 min de más se quita sola
+  }
 }
 $('rbSkip').addEventListener('click', hideRest);
-$('rbPlus').addEventListener('click', ()=>{ if(restEnd){ restEnd=Math.max(restEnd,Date.now())+15000; $('restbar').classList.remove('over'); tickRest(); } });
-$('rbMinus').addEventListener('click', ()=>{ if(restEnd){ restEnd-=15000; tickRest(); } });
+$('rbPlus').addEventListener('click', ()=>{ if(restEnd){ restEnd=Math.max(restEnd,Date.now())+15000; restAlerted=false; training.restEnd=restEnd; saveTraining(); tickRest(); } });
+$('rbMinus').addEventListener('click', ()=>{ if(restEnd){ restEnd-=15000; training.restEnd=restEnd; saveTraining(); tickRest(); } });
+document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState==='visible' && training && restEnd){ tickRest(); } });
 
 /* ================= Hojas inferiores ================= */
 function openSheet(html,bind){ $('sheet').innerHTML='<div class="grab"></div>'+html; $('scrim').hidden=false; bind&&bind($('sheet')); const f=$('sheet').querySelector('input,button'); f&&f.focus(); }

@@ -46,7 +46,7 @@ p{margin:0}
 main{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:4px 16px calc(var(--nav-h) + env(safe-area-inset-bottom,0px) + 24px)}
 .view{display:flex;flex-direction:column;gap:18px}
 .nav{position:fixed;left:0;right:0;bottom:0;z-index:20;background:color-mix(in srgb,var(--surface) 92%,transparent);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom,0px)}
-.nav-in{max-width:560px;margin:0 auto;display:grid;grid-template-columns:repeat(3,1fr);height:var(--nav-h)}
+.nav-in{max-width:560px;margin:0 auto;display:grid;grid-template-columns:repeat(4,1fr);height:var(--nav-h)}
 .nav button{background:none;border:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;color:var(--muted);font-size:.72rem;font-weight:600;cursor:pointer}
 .nav svg{width:24px;height:24px}
 .nav button[aria-current="page"]{color:var(--ink)}
@@ -357,6 +357,61 @@ button.hist-row:last-child{border-bottom:0}
 .del-set svg{width:20px;height:20px}
 .del-set:hover,.del-set:focus-visible{color:var(--push);background:var(--surface-2)}
 .add-set{border:1.5px dashed var(--line);background:none;color:var(--muted);border-radius:12px;min-height:44px;font-weight:600;cursor:pointer}
+
+/* Peso sugerido y récords */
+.sug{display:grid;grid-template-columns:32px 1fr;gap:10px;align-items:center;background:var(--surface-2);border-radius:12px;padding:10px 12px}
+.sug-i{width:32px;height:32px;border-radius:50%;display:grid;place-items:center;font-weight:800;background:var(--line);color:var(--ink)}
+.sug.up .sug-i{background:var(--ok);color:#fff}
+.sug b{display:block;font-weight:700;font-size:.98rem}
+.sug small{color:var(--muted);font-size:.8rem;line-height:1.3;display:block}
+.set.pr .sn{color:var(--legs)}
+.set.pr .fld{box-shadow:inset 0 0 0 2px var(--legs)}
+.set.pr .sn::after{content:"🏆";font-size:.7rem;display:block;line-height:1}
+.pr-line{background:color-mix(in srgb,var(--legs) 18%,var(--surface-2));border-radius:12px;padding:10px 12px;font-weight:700}
+.pr-badge{font-size:.78rem;color:var(--ink)}
+
+/* Progreso */
+.stat-grid.three{grid-template-columns:repeat(3,1fr)}
+.stat-grid.three .big{font-size:1.6rem}
+.pcard{display:flex;flex-direction:column;gap:12px}
+.chips-scroll{display:flex;gap:6px;overflow-x:auto;margin-inline:-16px;padding-inline:16px;scrollbar-width:none}
+.chips-scroll::-webkit-scrollbar{display:none}
+.echip{flex:none;border:1.5px solid var(--line);background:none;color:var(--muted);border-radius:999px;min-height:38px;padding:0 14px;font-weight:600;font-size:.85rem;cursor:pointer;white-space:nowrap}
+.echip[aria-pressed="true"]{background:var(--ink);border-color:var(--ink);color:var(--bg)}
+.ex-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.ex-stats div{background:var(--surface-2);border-radius:12px;padding:10px;display:flex;flex-direction:column;gap:2px;min-width:0}
+.ex-stats b{font-family:var(--display);font-weight:900;font-size:1.25rem;font-variant-numeric:tabular-nums}
+.ex-stats small{color:var(--muted);font-size:.72rem}
+.pos{color:var(--ok)}.neg{color:var(--push)}
+.chart{position:relative;touch-action:pan-y;user-select:none}
+.chart svg{display:block;width:100%;height:auto;overflow:visible}
+.chart .grid{stroke:var(--line);stroke-width:1}
+.chart .ax{fill:var(--muted);font-family:var(--mono);font-size:10px}
+.chart .val{fill:var(--ink);font-family:var(--mono);font-size:11px;font-weight:500}
+.chart .line{fill:none;stroke:var(--c);stroke-width:2;stroke-linejoin:round;stroke-linecap:round}
+.chart .area{fill:var(--c);opacity:.12}
+.chart .dot{fill:var(--c);stroke:var(--surface);stroke-width:2}
+.chart .dot.pr{fill:var(--legs)}
+.chart .dot.end{fill:var(--c);stroke:var(--surface);stroke-width:2}
+.chart .cross{stroke:var(--muted);stroke-width:1;stroke-dasharray:3 3}
+.chart .bar{fill:var(--c);opacity:.55}
+.chart .bar.cur{opacity:1}
+.chart .bar.hl{opacity:1}
+.chart .tt{position:absolute;pointer-events:none;background:var(--ink);color:var(--bg);border-radius:10px;padding:6px 10px;font-size:.8rem;line-height:1.3;white-space:nowrap;z-index:2}
+.chart-cap{color:var(--muted);font-size:.8rem}
+.mini-hist{display:flex;flex-direction:column}
+.mh-row{display:flex;justify-content:space-between;gap:12px;padding:8px 0;border-bottom:1px solid var(--line);font-family:var(--mono);font-size:.8rem;font-variant-numeric:tabular-nums}
+.mh-row:last-child{border-bottom:0}
+.mh-row span:first-child{color:var(--muted);flex:none}
+.mh-row span:last-child{text-align:right}
+.mini-seg{display:flex;background:var(--surface-2);border-radius:10px;padding:3px;gap:3px}
+.mini-seg button{border:0;background:none;color:var(--muted);border-radius:8px;min-height:32px;padding:0 10px;font-weight:600;font-size:.82rem;cursor:pointer}
+.mini-seg button[aria-pressed="true"]{background:var(--surface);color:var(--ink)}
+.body-now{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+.body-now b{font-family:var(--display);font-weight:900;font-size:2rem}
+.body-now span{font-size:.88rem;font-weight:600}
+.nav button{font-size:.68rem}
+body.lock .toast{bottom:calc(112px + env(safe-area-inset-bottom,0px));max-width:calc(100% - 32px);text-align:center}
 </style>
 </head>
 <body>
@@ -372,6 +427,7 @@ button.hist-row:last-child{border-bottom:0}
   <div class="nav-in">
     <button type="button" data-view="home" aria-current="page"><span class="ni"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg></span>Inicio</button>
     <button type="button" data-view="plan"><span class="ni"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M2 12h3M19 12h3M5 8v8M8 6v12M16 6v12M19 8v8M8 12h8"/></svg></span>Rutina</button>
+    <button type="button" data-view="progress"><span class="ni"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19V5M4 19h16M8 15l4-4 3 3 5-6"/></svg></span>Progreso</button>
     <button type="button" data-view="profile"><span class="ni"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.6-7 8-7s8 3 8 7"/></svg></span>Perfil</button>
   </div>
 </nav>

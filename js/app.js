@@ -244,7 +244,7 @@ function renderPlan(m){
     <ol class="exl">${s.ex.map((e,i)=>{ const lt=lastText(e.id); return `<li class="exi" style="--day:var(--${s.c})">
       <button type="button" class="exi-h" aria-expanded="false" data-exp="${i}"><span class="num">${i+1}</span><span><b>${esc(e.n)}</b><small>${e.s} × ${e.r}${e.t==='s'?' s':''} · ${e.rest}</small></span>${I.chev}</button>
       <div class="exi-b" hidden>
-        <div class="chips">${e.m.map(x=>`<span class="chip">${esc(x)}</span>`).join('')}<span class="chip">RIR ${esc(wi.rir)}</span></div>
+        <div class="chips">${e.m.map(x=>`<span class="chip">${esc(x)}</span>`).join('')}<button type="button" class="chip chip-btn" data-act="rir">RIR ${esc(wi.rir)} ⓘ</button></div>
         <p class="tip">${esc(e.tip)}</p>
         ${lt?`<p class="last">${esc(lt)}</p>`:''}
         <div class="links"><a href="${YT+encodeURIComponent(e.q)}" target="_blank" rel="noopener">${I.yt}Vídeo</a><a href="${IMG+encodeURIComponent(e.q.replace(' técnica',''))}" target="_blank" rel="noopener">${I.img}Imágenes</a></div>
@@ -258,6 +258,7 @@ function renderPlan(m){
         <li><b>Dentro de cada semana</b> intenta sumar una repetición o un poco de peso respecto a la última vez.</li>
         ${P.back?'<li><b>Las 2 primeras semanas</b> llevan una serie menos para readaptarte tras el parón.</li>':''}
       </ul>
+      <button type="button" class="btn ghost sm" data-act="guide">Ver la guía completa</button>
     </section>
   </div>`;
 }
@@ -290,6 +291,7 @@ function renderProfile(m){
       <li><b>Duerme 7–8 horas</b><span>Dormir poco aumenta el hambre y frena la recuperación.</span></li>
     </ul>
     <p class="note">Las calorías son una estimación con la fórmula de Mifflin-St Jeor. Si tienes alguna lesión o problema de salud, consulta antes con un profesional.</p>
+    <button type="button" class="guide-link" data-act="guide"><span class="gl-ic" aria-hidden="true">?</span><span><b>Cómo funciona tu plan</b><small>Series, RIR, progresión, bloques y alimentación</small></span>${I.chev}</button>
     <div class="sheet-btns"><button type="button" class="btn ghost" data-act="restart">Empezar el programa desde la semana 1</button><button type="button" class="btn danger" data-act="wipe">Borrar todos mis datos</button></div>
   </div>`;
 }
@@ -403,7 +405,7 @@ $('onbNext').addEventListener('click', ()=>{
   store.set('ppl-profile', P);
   if(restart){ seenBlock=0; store.set('ppl-seenblock',0); }
   closeOnboarding(); view='home'; store.set('ppl-view',view); render();
-  toast(editing ? 'Perfil actualizado' : 'Tu rutina está lista');
+  if(editing) toast('Perfil actualizado'); else openGuide();
 });
 function closeOnboarding(){ $('onb').hidden=true; document.body.classList.remove('lock'); }
 
@@ -559,6 +561,83 @@ function weightSheet(){
   });
 }
 
+
+/* ================= Guía del plan ================= */
+let gIdx = 0;
+function rirList(len){ return len===8 ? ["3","3","2","2","2","1–2","1","D"] : ["3","2","2","1–2","1","D"]; }
+function guideSlides(){
+  const plan = buildPlan(), n = nutrition(), len = blockLen(), wi = weekInfo();
+  const main = plan[0].ex[0], acc = plan[0].ex.find(e=>e.k==='i') || plan[0].ex[plan[0].ex.length-1];
+  const [lo,hi] = main.r.split('–').map(Number);
+  const hiR = hi || lo, loR = lo;
+  const kg = P.goal==='strength' ? 80 : 60;
+  const step = main.g==='Piernas'||main.g==='Glúteo' ? 5 : 2.5;
+  const fmtKg = v => String(v).replace('.',',');
+  return [
+    {lbl:'Paso 1', title:'Tu rutina', body:`
+      <p>${esc(P.name)}, entrenas <b>${P.days} días por semana</b> con una rutina de <b>${esc(SPLIT_NAME(P.days).toLowerCase())}</b>, pensada para <b>${esc(GOALS[P.goal].t.toLowerCase())}</b>.</p>
+      <div class="g-sessions">${plan.map((s,i)=>`<div style="--day:var(--${s.c})"><span>${i+1}</span><b>${esc(s.name)}</b><small>${s.ex.length} ejercicios</small></div>`).join('')}</div>
+      <p class="g-note">Las sesiones van en orden. La pantalla de inicio te dice cuál toca. Si un día no puedes ir, al volver haz la siguiente: no hace falta recuperar la que faltó.</p>`},
+    {lbl:'Paso 2', title:'Cómo hacer cada serie', body:`
+      <p>Cada ejercicio indica <b>series × repeticiones</b> y un <b>RIR</b>: las repeticiones que te quedan "en la recámara" al terminar la serie.</p>
+      <div class="g-rir" aria-label="Ejemplo de RIR 2"><div class="g-reps">${[...Array(10)].map((_,i)=>`<i class="${i<8?'done':'left'}">${i+1}</i>`).join('')}</div>
+      <p><b>RIR 2:</b> haces 8 repeticiones cuando podrías llegar a 10 con buena técnica.</p></div>
+      <ul class="plain"><li>Elige un peso que te deje justo en ese RIR dentro del rango de repeticiones.</li><li>Apunta los kg y las repeticiones reales de cada serie. La próxima vez verás lo que hiciste.</li><li>Al marcar una serie empieza el descanso. Respétalo: es parte del entrenamiento.</li></ul>`},
+    {lbl:'Paso 3', title:'Cómo progresar', body:`
+      <p>Usamos la <b>doble progresión</b>: primero subes repeticiones y después peso. Ejemplo con ${esc(main.n.toLowerCase())}, ${main.s} × ${main.r}:</p>
+      <div class="g-steps">
+        <div><span class="lbl">Sesión 1</span><b>${fmtKg(kg)} kg</b><small>${[...Array(main.s)].map((_,i)=>Math.max(loR,hiR-i)).join(' · ')}</small></div>
+        <div><span class="lbl">Sesión 2</span><b>${fmtKg(kg)} kg</b><small>${[...Array(main.s)].map((_,i)=>i===main.s-1?Math.max(loR,hiR-1):hiR).join(' · ')}</small></div>
+        <div class="up"><span class="lbl">Sesión 3</span><b>${fmtKg(kg)} kg</b><small>${[...Array(main.s)].map(()=>hiR).join(' · ')} ✓</small></div>
+        <div class="up2"><span class="lbl">Sesión 4</span><b>${fmtKg(kg+step)} kg</b><small>${[...Array(main.s)].map(()=>loR).join(' · ')}</small></div>
+      </div>
+      <p class="g-note">Cuando completas <b>todas las series en el tope del rango</b>, sube ${fmtKg(step)} kg y vuelve al mínimo de repeticiones. En ejercicios pequeños como ${esc(acc.n.toLowerCase())}, sube de 1 a 2 kg.</p>`},
+    {lbl:'Paso 4', title:`Bloques de ${len} semanas`, body:`
+      <p>Tu plan se organiza en bloques. Cada semana aprietas un poco más y la última es de <b>descarga</b>.</p>
+      <div class="g-weeks">${rirList(len).map((r,i)=>`<div class="${r==='D'?'dl':''} ${i===wi.w?'now':''}"><span>S${i+1}</span><b>${r==='D'?'Descarga':'RIR '+r}</b></div>`).join('')}</div>
+      <ul class="plain"><li><b>Semanas 1 a ${len-1}:</b> el RIR baja poco a poco, cada vez más cerca del fallo.</li><li><b>Semana ${len}:</b> mitad de series y lejos del fallo. Recuperas y vuelves más fuerte.</li>${P.back?'<li><b>Tus 2 primeras semanas</b> llevan una serie menos para readaptarte tras el parón.</li>':''}</ul>`},
+    {lbl:'Paso 5', title:'Cada bloque, rutina renovada', body:`
+      <p>Al terminar un bloque la app cambia tu rutina sola, como haría un entrenador:</p>
+      <ul class="g-list">
+        <li><b>Ejercicios accesorios</b><span>Cambian en cada bloque: nuevo estímulo y menos aburrimiento.</span></li>
+        <li><b>Ejercicios básicos</b><span>Se mantienen 2 bloques para que puedas comprobar que levantas más.</span></li>
+        <li><b>Foco del bloque</b><span>${P.goal==='muscle'||P.goal==='recomp'?'Alterna entre hipertrofia y fuerza-hipertrofia (algo más pesado).':P.goal==='strength'?'Alterna entre fuerza pura y fuerza con más volumen.':'Se mantiene centrado en tu objetivo.'}</span></li>
+        <li><b>Tu peso</b><span>Al empezar cada bloque te pediremos actualizarlo para ajustar las calorías.</span></li>
+      </ul>`},
+    {lbl:'Paso 6', title:'Tu alimentación', body:`
+      <p>El entrenamiento construye; la comida decide si ganas músculo o pierdes grasa.</p>
+      <div class="g-nut"><div><span class="lbl">Calorías</span><b>${es(n.kcal)}</b><small>kcal al día</small></div><div><span class="lbl">Proteína</span><b>${n.pg} g</b><small>al día</small></div><div><span class="lbl">Pasos</span><b>${es(n.steps)}</b><small>al día</small></div></div>
+      <ul class="plain"><li><b>Objetivo:</b> ${esc(n.pace.charAt(0).toLowerCase()+n.pace.slice(1))}.</li><li><b>Mide la cintura</b> cada 2 semanas, en ayunas, a la altura del ombligo.</li><li>Si en 2–3 semanas no avanzas, ajusta 150–200 kcal.</li><li><b>Duerme 7–8 horas.</b> Sin descanso no hay progreso.</li></ul>
+      <p class="g-note">Todo esto lo tienes siempre en tu perfil, en "Cómo funciona tu plan".</p>`}
+  ];
+}
+function openGuide(){
+  const slides = guideSlides(); gIdx = 0;
+  $('gTrack').innerHTML = slides.map((s,i)=>`<section class="g-slide" aria-roledescription="diapositiva" aria-label="${i+1} de ${slides.length}"><span class="lbl">${s.lbl} de ${slides.length}</span><h2>${s.title}</h2><div class="g-body">${s.body}</div></section>`).join('');
+  $('gDots').innerHTML = slides.map((_,i)=>`<i data-g="${i}"></i>`).join('');
+  $('guide').hidden = false; document.body.classList.add('lock');
+  $('gTrack').scrollLeft = 0; updGuide();
+}
+function closeGuide(){ $('guide').hidden=true; document.body.classList.remove('lock'); if(P && !training) render(); }
+function updGuide(){
+  const n = $('gTrack').children.length;
+  [...$('gDots').children].forEach((d,i)=>d.classList.toggle('on',i===gIdx));
+  $('gNext').textContent = gIdx===n-1 ? 'Empezar a entrenar' : 'Siguiente';
+  $('gPrev').style.visibility = gIdx===0 ? 'hidden' : 'visible';
+}
+function goGuide(i){ const t=$('gTrack'); gIdx=Math.max(0,Math.min(i,t.children.length-1)); t.scrollTo({left:gIdx*t.clientWidth, behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth'}); updGuide(); }
+$('gTrack').addEventListener('scroll', ()=>{ const t=$('gTrack'); const i=Math.round(t.scrollLeft/t.clientWidth); if(i!==gIdx){ gIdx=i; updGuide(); } }, {passive:true});
+$('gNext').addEventListener('click', ()=>{ if(gIdx >= $('gTrack').children.length-1) closeGuide(); else goGuide(gIdx+1); });
+$('gPrev').addEventListener('click', ()=>goGuide(gIdx-1));
+$('gSkip').addEventListener('click', closeGuide);
+$('gDots').addEventListener('click', e=>{ const d=e.target.closest('[data-g]'); if(d) goGuide(+d.dataset.g); });
+$('topHelp').addEventListener('click', openGuide);
+function rirSheet(){
+  openSheet(`<h3>¿Qué es el RIR?</h3><p class="tip">Repeticiones en la recámara: las que te quedan al terminar la serie con buena técnica.</p>
+    <div class="g-rir"><div class="g-reps">${[...Array(10)].map((_,i)=>`<i class="${i<8?'done':'left'}">${i+1}</i>`).join('')}</div><p><b>RIR 2:</b> haces 8 cuando podrías llegar a 10.</p></div>
+    <div class="sheet-btns"><button type="button" class="btn primary" data-no>Entendido</button></div>`, sh=>{ sh.querySelector('[data-no]').onclick=closeSheet; });
+}
+
 /* ================= Eventos generales ================= */
 document.querySelector('.nav').addEventListener('click', e=>{ const b=e.target.closest('button'); if(!b) return; view=b.dataset.view; store.set('ppl-view',view); render(); });
 $('main').addEventListener('click', e=>{
@@ -569,6 +648,8 @@ $('main').addEventListener('click', e=>{
   const act=a.dataset.act;
   if(act==='weight') weightSheet();
   else if(act==='edit') openOnboarding(true);
+  else if(act==='guide') openGuide();
+  else if(act==='rir') rirSheet();
   else if(act==='seen'){ seenBlock=weekInfo().block; store.set('ppl-seenblock',seenBlock); render(); }
   else if(act==='restart') sheetConfirm('Empezar desde la semana 1','Tu programa vuelve al bloque 1, semana 1. Tus kg, repeticiones e historial se mantienen.','Empezar de nuevo',()=>{ P.start=Date.now(); store.set('ppl-profile',P); seenBlock=0; store.set('ppl-seenblock',0); render(); toast('Programa reiniciado'); });
   else if(act==='wipe') sheetConfirm('Borrar todos los datos','Se borrarán tu perfil, kg, repeticiones e historial de este móvil. No se puede deshacer.','Borrar todo',()=>{ ['ppl-profile','ppl-last','ppl-hist','ppl-training','ppl-log','ppl-seenblock'].forEach(k=>{ try{localStorage.removeItem(k);}catch(_){} }); P=null; LAST={}; HIST=[]; training=null; seenBlock=0; openOnboarding(false); });

@@ -269,8 +269,8 @@ function renderHome(m){
       <div class="weekstrip">${days.map((x,i)=>{ const hs=onDay(x), h=hs[0]; const today=x.toDateString()===now.toDateString(); return `<div class="${today?'today':''}"><i class="${h?'on':''}" style="${h?`--day:var(--${h.c})`:''}">${h?esc(h.name[0]):''}</i>${"LMXJVSD"[i]}</div>`; }).join('')}</div>
     </section>
     <section class="card">
-      <div class="sec-h mb4"><h3>Historial</h3></div>
-      <div class="hist">${HIST.length?HIST.slice(-6).reverse().map(h=>`<div class="hist-row" style="--day:var(--${h.c})"><span class="bar"></span><div><b>${esc(h.name)}</b><small>${ago(h.start)} · ${fmtDur(h.end-h.start)}</small></div><div class="v">${h.sets} series<br>${es(h.vol)} kg</div></div>`).join(''):'<p class="empty">Cuando termines tu primer entrenamiento aparecerá aquí.</p>'}</div>
+      <div class="sec-h mb4"><h3>Historial</h3>${HIST.length>6?`<button type="button" class="link-btn" data-act="histall">Ver todo (${HIST.length})</button>`:''}</div>
+      <div class="hist">${HIST.length?HIST.slice(-6).reverse().map(histRow).join(''):'<p class="empty">Cuando termines tu primer entrenamiento aparecerá aquí.</p>'}</div>
     </section>
   </div>`;
 }
@@ -573,7 +573,8 @@ function finishSheet(){
         s.ex.forEach((e,i)=>{ const vals=training.sets[i].filter(x=>x.done&&(x.kg||x.reps)).map(x=>({kg:x.kg,reps:x.reps})); if(vals.length) LAST[e.id]=vals; });
         store.set('ppl-last',LAST);
         const wi=weekInfo();
-        HIST.push({sid:s.id, name:s.name, c:s.c, start:training.start, end:Date.now(), sets:st.d, vol:st.vol, block:wi.block, week:wi.w});
+        const detail = s.ex.map((e,i)=>({id:e.id, n:e.n, t:e.t||'', sets:training.sets[i].filter(x=>x.done).map(x=>({kg:x.kg, reps:x.reps}))})).filter(x=>x.sets.length);
+        HIST.push({sid:s.id, name:s.name, c:s.c, start:training.start, end:Date.now(), sets:st.d, vol:st.vol, block:wi.block, week:wi.w, ex:detail});
         if(HIST.length>300) HIST=HIST.slice(-300);
         store.set('ppl-hist',HIST);
       }
@@ -681,10 +682,96 @@ function rirSheet(){
     <div class="sheet-btns"><button type="button" class="btn primary" data-no>Entendido</button></div>`, sh=>{ sh.querySelector('[data-no]').onclick=closeSheet; });
 }
 
+
+/* ================= Historial: ver, editar y eliminar ================= */
+const DOW = ["dom","lun","mar","mié","jue","vie","sáb"], MON = ["ene","feb","mar","abr","may","jun","jul","ago","sep","oct","nov","dic"];
+const fDate = ts => { const d=new Date(ts); return `${DOW[d.getDay()]} ${d.getDate()} ${MON[d.getMonth()]} · ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`; };
+function histRow(h){ return `<button type="button" class="hist-row" data-hist="${h.start}" style="--day:var(--${h.c})"><span class="bar"></span><div><b>${esc(h.name)}</b><small>${ago(h.start)} · ${fmtDur(h.end-h.start)}</small></div><div class="v">${h.sets} series<br>${es(h.vol)} kg</div></button>`; }
+let hd = null, histMode = 'list';
+function openHistOverlay(){ $('histv').hidden=false; document.body.classList.add('lock'); }
+function closeHist(){ $('histv').hidden=true; document.body.classList.remove('lock'); hd=null; render(); }
+function openHistList(){
+  histMode='list'; hd=null; openHistOverlay();
+  $('hvTitle').textContent='Historial'; $('hvSub').textContent=`${HIST.length} entrenamientos`;
+  $('hvFoot').hidden=true;
+  const groups={};
+  HIST.slice().reverse().forEach(h=>{ const d=new Date(h.start); const k=`${MON[d.getMonth()]} ${d.getFullYear()}`; (groups[k]=groups[k]||[]).push(h); });
+  $('hvBody').innerHTML = HIST.length ? Object.entries(groups).map(([k,arr])=>`<section class="hv-group"><div class="lbl">${k}</div><div class="card hist">${arr.map(histRow).join('')}</div></section>`).join('') : '<p class="empty">Todavía no hay entrenamientos guardados.</p>';
+}
+function openHistDetail(start){
+  const h=HIST.find(x=>x.start===start); if(!h) return;
+  histMode='detail';
+  hd = JSON.parse(JSON.stringify(h));
+  openHistOverlay(); renderHistDetail();
+}
+function hdStats(){ let sets=0, vol=0; (hd.ex||[]).forEach(e=>e.sets.forEach(s=>{ sets++; if(e.t!=='s') vol+=num(s.kg)*num(s.reps); })); return {sets, vol:Math.round(vol)}; }
+function renderHistDetail(){
+  $('hvTitle').textContent=hd.name; $('hvSub').textContent=`${fDate(hd.start)} · ${fmtDur(hd.end-hd.start)}`;
+  $('hvFoot').hidden=false;
+  const st = hd.ex ? hdStats() : {sets:hd.sets, vol:hd.vol};
+  $('hvBody').innerHTML = `
+    <div class="sum hv-sum" style="--day:var(--${hd.c})"><div><span class="lbl">Series</span><b id="hvSets">${st.sets}</b></div><div><span class="lbl">Volumen</span><b id="hvVol">${es(st.vol)}</b></div><div><span class="lbl">Duración</span><b>${Math.round((hd.end-hd.start)/60000)}<small> min</small></b></div></div>
+    ${hd.ex ? hd.ex.map((e,i)=>`<section class="tex hv-ex" data-i="${i}" style="--day:var(--${hd.c})">
+      <div class="tex-h"><span class="num">${i+1}</span><div><b>${esc(e.n)}</b><small>${e.sets.length} ${e.sets.length===1?'serie':'series'}</small></div></div>
+      <div class="sets">
+        <div class="set-head hv"><span></span><span>Peso</span><span>${e.t==='s'?'Tiempo':'Reps'}</span><span></span></div>
+        ${e.sets.map((s,j)=>`<div class="set hv" data-j="${j}">
+          <span class="sn">${j+1}</span>
+          <label class="fld"><input id="hk-${i}-${j}" type="text" inputmode="decimal" autocomplete="off" value="${esc(s.kg)}" placeholder="—" data-f="kg" aria-label="Kg, serie ${j+1}"><span>kg</span></label>
+          <label class="fld"><input id="hr-${i}-${j}" type="text" inputmode="numeric" autocomplete="off" value="${esc(s.reps)}" placeholder="—" data-f="reps" aria-label="${e.t==='s'?'Segundos':'Repeticiones'}, serie ${j+1}"><span>${e.t==='s'?'seg':'reps'}</span></label>
+          <button type="button" class="del-set" data-del aria-label="Eliminar serie ${j+1}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+        </div>`).join('')}
+        <button type="button" class="add-set" data-add>+ Añadir serie</button>
+      </div></section>`).join('') : '<p class="note">Este entrenamiento se guardó con una versión anterior de la app y no tiene el detalle de las series. Puedes eliminarlo si quieres.</p>'}`;
+  $('hvSave').hidden = !hd.ex;
+}
+function updHdStats(){ const st=hdStats(); const a=$('hvSets'), b=$('hvVol'); if(a) a.textContent=st.sets; if(b) b.textContent=es(st.vol); }
+function recalcLast(ids){
+  ids.forEach(id=>{
+    for(let i=HIST.length-1;i>=0;i--){ const e=(HIST[i].ex||[]).find(x=>x.id===id); if(e){ LAST[id]=e.sets.map(s=>({kg:s.kg,reps:s.reps})); return; } }
+    delete LAST[id];
+  });
+  store.set('ppl-last',LAST);
+}
+$('hvBody').addEventListener('click', e=>{
+  const row=e.target.closest('[data-hist]'); if(row){ $('hvBody').dataset.from='list'; openHistDetail(+row.dataset.hist); return; }
+  if(!hd) return;
+  const ex=e.target.closest('.hv-ex'); if(!ex) return; const i=+ex.dataset.i;
+  if(e.target.closest('[data-del]')){ const j=+e.target.closest('.set').dataset.j; hd.ex[i].sets.splice(j,1); const y=$('hvBody').scrollTop; renderHistDetail(); $('hvBody').scrollTop=y; return; }
+  if(e.target.closest('[data-add]')){ const arr=hd.ex[i].sets, lastS=arr[arr.length-1]||{kg:'',reps:''}; arr.push({kg:lastS.kg, reps:lastS.reps}); const y=$('hvBody').scrollTop; renderHistDetail(); $('hvBody').scrollTop=y; return; }
+});
+$('hvBody').addEventListener('input', e=>{
+  const inp=e.target; if(!inp.dataset.f || !hd) return;
+  const i=+inp.closest('.hv-ex').dataset.i, j=+inp.closest('.set').dataset.j;
+  inp.value = inp.dataset.f==='kg' ? inp.value.replace(/[^0-9.,]/g,'') : inp.value.replace(/[^0-9]/g,'');
+  hd.ex[i].sets[j][inp.dataset.f]=inp.value; updHdStats();
+});
+$('hvBack').addEventListener('click', ()=>{ if(histMode==='detail' && $('hvBody').dataset.from==='list'){ $('hvBody').dataset.from=''; openHistList(); } else closeHist(); });
+$('hvSave').addEventListener('click', ()=>{
+  if(!hd || !hd.ex) return;
+  const idx=HIST.findIndex(x=>x.start===hd.start); if(idx<0) return;
+  const ids=new Set([...(HIST[idx].ex||[]).map(e=>e.id)]);
+  hd.ex = hd.ex.map(e=>({...e, sets:e.sets.filter(s=>s.kg!==''||s.reps!=='')})).filter(e=>e.sets.length);
+  if(!hd.ex.length){ return deleteHist(); }
+  const st=hdStats(); hd.sets=st.sets; hd.vol=st.vol;
+  HIST[idx]=hd; store.set('ppl-hist',HIST); recalcLast(ids);
+  toast('Cambios guardados'); closeHist();
+});
+$('hvDelete').addEventListener('click', ()=>deleteHist());
+function deleteHist(){
+  const h=hd;
+  sheetConfirm('Eliminar entrenamiento', `Se borrará ${h.name} del ${fDate(h.start)}. No se puede deshacer.`, 'Eliminar', ()=>{
+    const ids=(HIST.find(x=>x.start===h.start)?.ex||[]).map(e=>e.id);
+    HIST=HIST.filter(x=>x.start!==h.start); store.set('ppl-hist',HIST); recalcLast(ids);
+    toast('Entrenamiento eliminado'); closeHist();
+  });
+}
+
 /* ================= Eventos generales ================= */
 document.querySelector('.nav').addEventListener('click', e=>{ const b=e.target.closest('button'); if(!b) return; view=b.dataset.view; store.set('ppl-view',view); render(); });
 $('main').addEventListener('click', e=>{
   const t=e.target.closest('[data-train]'); if(t){ startTraining(t.dataset.train); return; }
+  const hr=e.target.closest('[data-hist]'); if(hr){ openHistDetail(+hr.dataset.hist); return; }
   const p=e.target.closest('[data-plan]'); if(p){ planSel=+p.dataset.plan; store.set('ppl-plansel',planSel); render(); return; }
   const x=e.target.closest('[data-exp]'); if(x){ const li=x.closest('.exi'), b=li.querySelector('.exi-b'), open=b.hidden; b.hidden=!open; x.setAttribute('aria-expanded',open); li.toggleAttribute('open-x',open); return; }
   const a=e.target.closest('[data-act]'); if(!a) return;
@@ -692,6 +779,7 @@ $('main').addEventListener('click', e=>{
   if(act==='weight') weightSheet();
   else if(act==='edit') openOnboarding(true);
   else if(act==='guide') openGuide();
+  else if(act==='histall') openHistList();
   else if(act==='rir') rirSheet();
   else if(act==='seen'){ seenBlock=weekInfo().block; store.set('ppl-seenblock',seenBlock); render(); }
   else if(act==='restart') sheetConfirm('Empezar desde la semana 1','Tu programa vuelve al bloque 1, semana 1. Tus kg, repeticiones e historial se mantienen.','Empezar de nuevo',()=>{ P.start=Date.now(); store.set('ppl-profile',P); seenBlock=0; store.set('ppl-seenblock',0); render(); toast('Programa reiniciado'); });

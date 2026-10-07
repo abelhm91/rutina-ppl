@@ -340,6 +340,23 @@ body.lock{overflow:hidden}
 .adj-r.up .adj-i{background:var(--pull)}
 .adj-r.down .adj-i{background:var(--push)}
 .adj-k{font-family:var(--mono);font-weight:500;white-space:nowrap}
+
+/* Historial editable */
+button.hist-row{width:100%;border:0;background:none;color:inherit;font:inherit;text-align:left;cursor:pointer}
+button.hist-row:last-child{border-bottom:0}
+.link-btn{border:0;background:none;color:var(--pull);font-weight:600;font-size:.9rem;cursor:pointer;min-height:36px;padding:0}
+.histv{position:fixed;inset:0;z-index:45;background:var(--bg);display:flex;flex-direction:column}
+.histv h2{font-size:1.7rem;font-weight:900;text-transform:uppercase}
+.hv-body{flex:1;overflow-y:auto;padding:6px 16px 24px;display:flex;flex-direction:column;gap:12px}
+.hv-group{display:flex;flex-direction:column;gap:6px}
+.hv-group .card{padding:4px 16px}
+.hv-sum b small{font-size:.9rem;color:var(--muted)}
+.hv-foot{flex:none;padding:10px 16px calc(12px + env(safe-area-inset-bottom,0px));display:flex;flex-direction:column;gap:6px;border-top:1px solid var(--line)}
+.set-head.hv,.set.hv{grid-template-columns:28px minmax(0,1fr) minmax(0,1fr) 44px}
+.del-set{width:44px;height:44px;border:0;border-radius:12px;background:transparent;color:var(--muted);display:grid;place-items:center;cursor:pointer}
+.del-set svg{width:20px;height:20px}
+.del-set:hover,.del-set:focus-visible{color:var(--push);background:var(--surface-2)}
+.add-set{border:1.5px dashed var(--line);background:none;color:var(--muted);border-radius:12px;min-height:44px;font-weight:600;cursor:pointer}
 </style>
 </head>
 <body>
@@ -395,6 +412,16 @@ body.lock{overflow:hidden}
   </div>
 </div>
 
+<div class="histv" id="histv" hidden role="dialog" aria-modal="true" aria-labelledby="hvTitle">
+  <div class="onb-in">
+    <div class="onb-top"><div class="t-row">
+      <button type="button" class="icon-btn" id="hvBack" aria-label="Volver"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg></button>
+      <div class="t-title"><h2 id="hvTitle">Historial</h2><div class="lbl" id="hvSub"></div></div>
+    </div></div>
+    <div class="hv-body" id="hvBody"></div>
+    <div class="hv-foot" id="hvFoot" hidden><button type="button" class="btn primary" id="hvSave">Guardar cambios</button><button type="button" class="btn danger" id="hvDelete">Eliminar entrenamiento</button></div>
+  </div>
+</div>
 <div class="guide" id="guide" hidden role="dialog" aria-modal="true" aria-label="Cómo funciona tu plan">
   <div class="onb-in">
     <div class="onb-top"><div class="onb-row">

@@ -18,6 +18,7 @@ const I = {
   img:'<svg viewBox="0 0 16 16" aria-hidden="true"><rect x="1.5" y="2.5" width="13" height="11" rx="2" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M3 12l3.5-4 2.5 3 1.5-1.5L13 12z" fill="currentColor"/></svg>',
   chev:'<svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>',
   back:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg>',
+  swap:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 4L3 8l4 4"/><path d="M3 8h13a4 4 0 0 1 4 4"/><path d="M17 20l4-4-4-4"/><path d="M21 16H8a4 4 0 0 1-4-4"/></svg>',
   check:'<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4.5 10.5l3.5 3.5 7.5-8" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>'
 };
 const YT='https://www.youtube.com/results?search_query=', IMG='https://www.google.com/search?tbm=isch&q=';
@@ -123,6 +124,14 @@ function scheme(e, isMain, block){
   if((P.prio||[]).includes(e.g)) s+=1;
   return {s:Math.min(s,5), r, rest};
 }
+function dose(e, si, wi=weekInfo()){
+  const isMainSlot = si<2;
+  const sc = scheme(e, isMainSlot && e.k==='c', wi.block);
+  let s = sc.s;
+  if(wi.adapt) s = Math.max(2, s-1);
+  if(wi.deload) s = Math.max(1, Math.ceil(s/2));
+  return {...e, s, r:sc.r, rest:sc.rest, si};
+}
 function buildPlan(){
   const wi = weekInfo();
   const maxEx = Math.min(({45:5,60:6,75:7,90:8})[P.time] || 6, P.exp==='beg' ? 6 : 8);
@@ -138,13 +147,11 @@ function buildPlan(){
       if(!opts.length) continue;
       const isMainSlot = si<2;
       const rot = isMainSlot ? Math.floor(wi.block/2) + off : wi.block + off + si;
-      const e = opts[rot % opts.length];
+      let e = opts[rot % opts.length];
+      const sw = (P.swaps||{})[`${type}${off}:${si}`];
+      if(sw && sw.block===wi.block){ const alt=opts.find(x=>x.id===sw.id); if(alt) e=alt; }
       used.add(e.id);
-      const sc = scheme(e, isMainSlot && e.k==='c', wi.block);
-      let s = sc.s;
-      if(wi.adapt) s = Math.max(2, s-1);
-      if(wi.deload) s = Math.max(1, Math.ceil(s/2));
-      ex.push({...e, s, r:sc.r, rest:sc.rest});
+      ex.push(dose(e, si, wi));
     }
     const name = count[type]>1 ? `${T.name} ${seen[type]===1?'A':'B'}` : T.name;
     return { id:`${type}${off}`, idx, type, name, c:T.c, focus:T.focus, ex };
@@ -497,7 +504,8 @@ function renderTrainList(){
     const lt=lastText(e.id), unit=e.t==='s'?'seg':'reps', sg=suggest(e,wi), prs=training.pr||[];
     return `<section class="tex" data-i="${i}">
     <div class="tex-h"><span class="num">${i+1}</span><div><b>${esc(e.n)}</b><small>${e.s} × ${e.r}${e.t==='s'?' s':''} · ${e.rest} · RIR ${esc(wi.rir)}</small></div>
-      <a class="icon-btn" href="${YT+encodeURIComponent(e.q)}" target="_blank" rel="noopener" aria-label="Ver vídeo de ${esc(e.n)}">${I.yt}</a></div>
+      <div class="tex-acts"><button type="button" class="icon-btn swap-btn" data-swap="${i}" aria-label="Cambiar ${esc(e.n)} por otro ejercicio">${I.swap}</button><a class="icon-btn" href="${YT+encodeURIComponent(e.q)}" target="_blank" rel="noopener" aria-label="Ver vídeo de ${esc(e.n)}">${I.yt}</a></div></div>
+    ${e.swappedFrom?`<p class="swapped">En lugar de ${esc(e.swappedFrom)}${e.swapKeep?' · resto del bloque':' · solo hoy'}</p>`:''}
     <div class="sug ${sg.up?'up':''}"><span class="sug-i" aria-hidden="true">${sg.up?'↑':'→'}</span><div><b>${esc(sg.title)}</b><small>${esc(sg.why)}</small></div></div>
     ${lt?`<p class="last">${esc(lt)}</p>`:''}
     <div class="sets">
@@ -521,6 +529,7 @@ $('tList').addEventListener('input', e=>{
   training.sets[i][j][inp.dataset.f]=inp.value; saveTraining(); if(training.sets[i][j].done) updTrain();
 });
 $('tList').addEventListener('click', e=>{
+  const sb=e.target.closest('[data-swap]'); if(sb){ swapSheet(+sb.dataset.swap); return; }
   const tick=e.target.closest('.tick'); if(!tick) return;
   unlockAudio();
   const row=tick.closest('.set'), i=+tick.closest('.tex').dataset.i, j=+row.dataset.j;
@@ -596,6 +605,53 @@ $('rbSkip').addEventListener('click', hideRest);
 $('rbPlus').addEventListener('click', ()=>{ if(restEnd){ restEnd=Math.max(restEnd,Date.now())+15000; restAlerted=false; training.restEnd=restEnd; saveTraining(); tickRest(); } });
 $('rbMinus').addEventListener('click', ()=>{ if(restEnd){ restEnd-=15000; training.restEnd=restEnd; saveTraining(); tickRest(); } });
 document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState==='visible' && training && restEnd){ tickRest(); } });
+
+
+/* ================= Cambiar ejercicio al momento ================= */
+const PAT_NAME = {hpress:'empuje horizontal',ipress:'press inclinado',vpress:'press de hombro',lateral:'hombro lateral',fly:'aperturas de pecho',triceps:'tríceps',vpull:'tirón vertical',hpull:'remo',reardelt:'hombro posterior',latiso:'dorsal',biceps:'bíceps',squat:'sentadilla o prensa',hinge:'bisagra de cadera',lunge:'trabajo a una pierna',hamcurl:'femoral',quadext:'cuádriceps',calves:'gemelos',glute:'glúteo',core:'abdomen'};
+let swapPick = null;
+function swapOptions(i){
+  const s=training.sess, cur=s.ex[i];
+  const inSession=new Set(s.ex.map(x=>x.id));
+  return allowed(cur.p).filter(x=>!inSession.has(x.id));
+}
+function swapSheet(i){
+  const cur=training.sess.ex[i], opts=swapOptions(i), done=training.sets[i].filter(x=>x.done).length;
+  swapPick=null;
+  const lastLine=id=>{ const l=(LAST[id]||[]).filter(x=>x.kg||x.reps); return l.length?`Última vez: ${l.map(x=>`${x.kg||'–'}×${x.reps||'–'}`).slice(0,3).join(' · ')}`:'Sin registros todavía'; };
+  const eqTag=x=>{ const n=x.n.toLowerCase(); return /barra|landmine|peso muerto convencional/.test(n)?'Barra':/mancuerna|goblet/.test(n)?'Mancuernas':/polea|cruce|face pull|pallof|jalón/.test(n)?'Polea':/máquina|prensa|contractora|hack|curl femoral|extensión de cuádriceps|abducción|hiperextensiones/.test(n)?'Máquina':'Peso corporal'; };
+  openSheet(`<span class="lbl">Cambiar ejercicio</span><h3>${esc(cur.n)}</h3>
+    <p class="tip">Alternativas de ${PAT_NAME[cur.p]||'este grupo'} que encajan con tu material${(P.inj||[]).length?' y tus molestias':''}.</p>
+    ${opts.length?`<div class="swap-list" role="radiogroup" aria-label="Alternativas">${opts.map(x=>`<button type="button" class="swap-opt" role="radio" aria-checked="false" data-pick="${x.id}">
+        <span class="so-main"><b>${esc(x.n)}</b><small>${esc(x.m.join(' · '))}</small><small class="so-last">${esc(lastLine(x.id))}</small></span>
+        <span class="so-tag">${eqTag(x)}</span></button>`).join('')}</div>
+      ${done?`<p class="warn">Tienes ${done} ${done===1?'serie marcada':'series marcadas'} en este ejercicio. Se quitarán al cambiarlo.</p>`:''}
+      <div class="lbl">¿Hasta cuándo?</div>
+      <div class="oseg n2 swap-when"><button type="button" data-when="today" aria-pressed="true">Solo hoy</button><button type="button" data-when="block" aria-pressed="false">Resto del bloque</button></div>
+      <div class="sheet-btns"><button type="button" class="btn primary" data-ok disabled>Cambiar ejercicio</button><button type="button" class="btn ghost" data-no>Cancelar</button></div>`
+    :`<p class="note">No hay otra alternativa para este ejercicio con tu material${(P.inj||[]).length?' y tus molestias':''}. Puedes hacer otra variante por tu cuenta y apuntar los kg igualmente.</p><div class="sheet-btns"><button type="button" class="btn ghost" data-no>Cerrar</button></div>`}`,
+  sh=>{
+    let when='today';
+    sh.querySelectorAll('[data-pick]').forEach(b=>b.onclick=()=>{
+      swapPick=b.dataset.pick; sh.querySelectorAll('[data-pick]').forEach(x=>x.setAttribute('aria-checked',x===b)); sh.querySelector('[data-ok]').disabled=false;
+    });
+    sh.querySelectorAll('[data-when]').forEach(b=>b.onclick=()=>{ when=b.dataset.when; sh.querySelectorAll('[data-when]').forEach(x=>x.setAttribute('aria-pressed',x===b)); });
+    const ok=sh.querySelector('[data-ok]'); if(ok) ok.onclick=()=>{ if(!swapPick) return; doSwap(i, swapPick, when==='block'); closeSheet(); };
+    sh.querySelector('[data-no]').onclick=closeSheet;
+  });
+}
+function doSwap(i, newId, keep){
+  const s=training.sess, cur=s.ex[i], nx=LIB.find(x=>x.id===newId); if(!nx) return;
+  const wi=weekInfo(), si=cur.si??i;
+  const orig = cur.swappedFrom || cur.n;
+  const ne = {...dose(nx, si, wi), swappedFrom: orig===nx.n?undefined:orig, swapKeep:keep};
+  s.ex[i]=ne;
+  training.sets[i]=Array.from({length:ne.s},()=>({kg:'',reps:'',done:false}));
+  training.pr=(training.pr||[]).filter(k=>!k.startsWith(i+'-'));
+  if(keep){ P.swaps=P.swaps||{}; P.swaps[`${training.sid}:${si}`]={id:newId, block:wi.block}; store.set('ppl-profile',P); }
+  saveTraining(); renderTrainList(); updTrain();
+  toast(`Ahora: ${nx.n}`);
+}
 
 /* ================= Hojas inferiores ================= */
 function openSheet(html,bind){ $('sheet').innerHTML='<div class="grab"></div>'+html; $('scrim').hidden=false; bind&&bind($('sheet')); const f=$('sheet').querySelector('input,button'); f&&f.focus(); }
@@ -817,7 +873,7 @@ function deleteHist(){
 /* ================= Peso sugerido y récords ================= */
 const kgStr = v => { const r=Math.round(v*100)/100; return String(r).replace('.',','); };
 function repRange(e){ const m=String(e.r).match(/(\d+)(?:\D+(\d+))?/); const lo=m?+m[1]:8, hi=m&&m[2]?+m[2]:lo; return [lo,hi]; }
-function incFor(e){ if(e.k==='c') return (e.p==='squat'||e.p==='hinge') ? 5 : 2.5; return 2; }
+function incFor(e){ if(/mancuerna|goblet/i.test(e.n)) return 2; if(e.k==='c') return (e.p==='squat'||e.p==='hinge') ? 5 : 2.5; return 2; }
 function suggest(e, wi=weekInfo()){
   const [lo,hi]=repRange(e), last=(LAST[e.id]||[]).filter(x=>x.kg!==''||x.reps!=='');
   if(!last.length) return {kg:'', reps:String(lo), title:`Primera vez: ${e.r}${e.t==='s'?' s':' reps'}`, why:`Elige un peso con el que te queden ${wi.rir} repeticiones en la recámara.`};

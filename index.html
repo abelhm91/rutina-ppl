@@ -474,6 +474,23 @@ body{background:var(--glow),var(--bg);background-color:var(--bg)}
 .fld{background:color-mix(in oklch,var(--surface-2) 90%,transparent)}
 @supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){ :root{--surface:var(--card)} }
 @media (prefers-reduced-transparency:reduce){ :root{--surface:var(--card)} .card,.hero,.mini,.exi,.tex,.stat{backdrop-filter:none;-webkit-backdrop-filter:none} }
+
+/* Cambiar ejercicio */
+.tex-h .tex-acts{margin-left:auto;display:flex;gap:6px;flex:none}
+.tex-h .tex-acts .icon-btn{width:40px;height:40px}
+.swap-btn svg{width:20px;height:20px;color:var(--muted)}
+.swapped{font-size:.8rem;color:var(--primary);font-weight:600;margin-top:-4px}
+.sheet{max-height:88vh;overflow-y:auto}
+.swap-list{display:flex;flex-direction:column;gap:8px;max-height:42vh;overflow-y:auto;margin-inline:-4px;padding:2px 4px}
+.swap-opt{border:2px solid var(--glass-edge);background:var(--surface-2);border-radius:var(--r);padding:12px 14px;display:flex;align-items:center;gap:12px;text-align:left;cursor:pointer;color:var(--ink)}
+.swap-opt[aria-checked="true"]{border-color:var(--primary);background:color-mix(in oklch,var(--primary) 14%,var(--surface-2))}
+.so-main{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+.so-main b{font-weight:600}
+.so-main small{color:var(--muted);font-size:.8rem}
+.so-last{font-family:var(--mono);font-size:.72rem!important}
+.so-tag{flex:none;font-size:.7rem;font-weight:600;color:var(--muted);background:var(--surface);border-radius:999px;padding:3px 8px}
+.warn{font-size:.85rem;color:var(--destructive);font-weight:600}
+.swap-when button{font-size:.95rem!important;min-height:48px!important}
 </style>
 </head>
 <body>

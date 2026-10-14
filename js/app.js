@@ -168,9 +168,23 @@ function chooseSlots(split, maxEx){
   sess.forEach(x=>x.chosen.sort((a,b)=>ord(a)-ord(b)));
   return sess;
 }
+/* Ejercicios por sesión según la división: lo justo para cubrir todo con buen volumen */
+function exPerSession(p){
+  const d=p.days, beg=p.exp==='beg', adv=p.exp==='adv';
+  if(d<=2) return beg?6:7;                 // cuerpo completo 2 días: hay que meter todo en dos sesiones
+  if(d===3) return beg?6:7;                // cuerpo completo (principiante) o PPL
+  if(d===4) return beg?6:7;                // torso / pierna
+  return adv?7:6;                          // 5–6 días: el volumen se reparte en más sesiones
+}
+/* Duración estimada: series × (trabajo + descanso) + cambios de ejercicio + calentamiento */
+function restMin(t){ const n=String(t).replace(/,/g,'.').match(/[\d.]+/g)||['1.5']; const v=n.map(Number); return v.length>1?(v[0]+v[1])/2:v[0]; }
+function estMinutes(sess){
+  const m = sess.ex.reduce((a,e)=>a + e.s*(0.75+restMin(e.rest)) + 1.5, 0) + 8;
+  return Math.round(m/5)*5;
+}
 function buildPlan(){
   const wi = weekInfo();
-  const maxEx = Math.min(({45:5,60:6,75:7,90:8})[P.time] || 6, P.exp==='beg' ? 6 : 8);
+  const maxEx = exPerSession(P);
   const split = splitFor(P);
   const count = {}; split.forEach(([t])=>count[t]=(count[t]||0)+1);
   const seen = {};
@@ -294,7 +308,7 @@ function renderHome(m){
       <div class="lbl">${training?'Entrenamiento en curso':'Te toca'}</div>
       <h2>${esc(s.name)}</h2>
       <p class="muscles">${esc(s.focus)}</p>
-      <div class="hero-stats"><span><b>${s.ex.length}</b>ejercicios</span><span><b>${totalSets(s)}</b>series</span><span><b>${P.time}</b>minutos</span></div>
+      <div class="hero-stats"><span><b>${s.ex.length}</b>ejercicios</span><span><b>${totalSets(s)}</b>series</span><span><b>~${estMinutes(s)}</b>minutos</span></div>
       <button type="button" class="btn-go" data-train="${s.id}">${I.play}${training?'Continuar':'Entrenar'}</button>
       ${lo?`<p class="note left">Última vez: ${ago(lo.start)} · ${fmtDur(lo.end-lo.start)} · ${es(lo.vol)} kg</p>`:''}
     </section>
@@ -326,7 +340,7 @@ function renderPlan(m){
   setTop(`Bloque ${wi.block+1} · Semana ${wi.w+1}`, 'Tu rutina', wi.deload?'Descarga':`RIR ${wi.rir}`);
   m.innerHTML = `<div class="view">
     <div class="seg-scroll"><div class="seg n${plan.length}" role="tablist">${plan.map((x,i)=>`<button type="button" role="tab" class="${x.c}" style="--day:var(--${x.c})" data-plan="${i}" aria-selected="${i===planSel}">${esc(x.name)}</button>`).join('')}</div></div>
-    <p class="tip">${esc(s.focus)} · ${s.ex.length} ejercicios · ${totalSets(s)} series${wi.deload?' · <b>descarga: mitad de series</b>':''}</p>
+    <p class="tip">${esc(s.focus)} · ${s.ex.length} ejercicios · ${totalSets(s)} series · ~${estMinutes(s)} min${wi.deload?' · <b>descarga: mitad de series</b>':''}</p>
     <ol class="exl">${s.ex.map((e,i)=>{ const lt=lastText(e.id); return `<li class="exi" style="--day:var(--${s.c})">
       <button type="button" class="exi-h" aria-expanded="false" data-exp="${i}"><span class="num">${i+1}</span><span><b>${esc(e.n)}</b><small>${e.s} × ${e.r}${e.t==='s'?' s':''} · ${e.rest}</small></span>${I.chev}</button>
       <div class="exi-b" hidden>
@@ -361,7 +375,7 @@ function renderProfile(m){
     </section>
     <section class="card">
       <div class="sec-h mb8"><h3>Tu plan</h3></div>
-      ${row('Objetivo',GOALS[P.goal].t)}${row('Nivel',EXP[P.exp].t+(P.back?' · tras un parón':''))}${row('Rutina',SPLIT_NAME(P.days))}${row('Duración',P.time+' min por sesión')}${row('Lugar',EQUIP[P.eq].t)}${row('Molestias',(P.inj||[]).length?(P.inj.map(x=>INJ[x]).join(', ')):'Ninguna')}${row('Prioridad',(P.prio||[]).join(', ')||'Equilibrado')}${row('Progreso',`Bloque ${wi.block+1}, semana ${wi.w+1} de ${wi.len}`)}
+      ${row('Objetivo',GOALS[P.goal].t)}${row('Nivel',EXP[P.exp].t+(P.back?' · tras un parón':''))}${row('Rutina',SPLIT_NAME(P.days))}${row('Duración',`~${estMinutes(buildPlan()[0])} min por sesión`)}${row('Lugar',EQUIP[P.eq].t)}${row('Molestias',(P.inj||[]).length?(P.inj.map(x=>INJ[x]).join(', ')):'Ninguna')}${row('Prioridad',(P.prio||[]).join(', ')||'Equilibrado')}${row('Progreso',`Bloque ${wi.block+1}, semana ${wi.w+1} de ${wi.len}`)}
     </section>
     <div class="sec-h"><h3>Nutrición</h3><span class="lbl">Mantenimiento ≈ ${es(n.tdee)} kcal</span></div>
     <div class="stat-grid">
@@ -400,11 +414,11 @@ const STEPS = [
     ok:d=>!!d.goal, html:d=>cards('goal',GOALS,d.goal)},
   {id:'exp', title:'¿Cuánta experiencia tienes?', sub:'Cuenta solo el tiempo entrenando con constancia.',
     ok:d=>!!d.exp, html:d=>cards('exp',EXP,d.exp)+`<button type="button" class="toggle" data-tog="back" aria-pressed="${!!d.back}"><span class="sw"></span><span><b>Vuelvo tras un parón</b><small>Más de 3 meses sin entrenar. Empezarás con 2 semanas de readaptación.</small></span></button>`},
-  {id:'time', title:'¿Cuánto tiempo tienes?', sub:'Sé realista: es mejor una rutina que puedas cumplir.',
-    ok:d=>d.days>=2 && d.time,
+  {id:'time', title:'¿Cuántos días puedes entrenar?', sub:'Elige los días que de verdad vas a poder cumplir cada semana. La duración de cada sesión la ajustamos nosotros para que la rutina esté completa.',
+    ok:d=>d.days>=2,
     html:d=>`<div class="lbl">Días por semana</div>${seg('days',[[2,'2'],[3,'3'],[4,'4'],[5,'5'],[6,'6']],d.days)}
       <p class="hint">${d.days?esc(splitHint(d)):'&nbsp;'}</p>
-      <div class="lbl">Minutos por sesión</div>${seg('time',[[45,'45'],[60,'60'],[75,'75'],[90,'90']],d.time)}`},
+      ${d.days?`<p class="hint">${esc(timeHint(d))}</p>`:''}`},
   {id:'eq', title:'¿Dónde entrenas?', sub:'Elegimos los ejercicios según el material que tengas.',
     ok:d=>!!d.eq, html:d=>cards('eq',EQUIP,d.eq)},
   {id:'act', title:'¿Cómo es tu día a día?', sub:'Sin contar el entrenamiento. Afecta a cuánto debes comer.',
@@ -420,6 +434,12 @@ const STEPS = [
 ];
 function seg(k,opts,val){ return `<div class="oseg n${opts.length}">${opts.map(([v,t])=>`<button type="button" data-k="${k}" data-v="${v}" aria-pressed="${String(val)===String(v)}">${t}</button>`).join('')}</div>`; }
 function cards(k,obj,val){ return `<div class="ocards">${Object.entries(obj).map(([v,o])=>`<button type="button" class="ocard" data-k="${k}" data-v="${v}" aria-pressed="${val===v}"><b>${o.t}</b><small>${o.d}</small></button>`).join('')}</div>`; }
+function timeHint(d){
+  const save=P; P={...d, start:Date.now(), inj:d.inj||[], prio:d.prio||[], eq:d.eq||'g'};
+  const plan=buildPlan(); P=save;
+  const mins=plan.map(estMinutes), lo=Math.min(...mins), hi=Math.max(...mins);
+  return `Cada sesión durará unos ${lo===hi?lo:lo+'–'+hi} minutos, calentamiento incluido.`;
+}
 function splitHint(d){
   return ({2:"Cuerpo completo dos veces por semana.",3:d.exp==='beg'?"Cuerpo completo tres veces: lo mejor para empezar.":"Empuje, tirón y piernas.",4:"Torso y pierna, dos veces cada uno.",5:"Empuje, tirón, piernas, torso y pierna.",6:"Empuje, tirón y piernas, dos veces por semana."})[d.days];
 }
@@ -431,7 +451,7 @@ function summaryHtml(d){
     <div class="kv"><span>Objetivo</span><b>${GOALS[d.goal].t}</b></div>
     <div class="kv"><span>Rutina</span><b>${esc(SPLIT_NAME(d.days))}</b></div>
     <div class="kv"><span>Sesiones</span><b>${plan.map(s=>esc(s.name)).join(', ')}</b></div>
-    <div class="kv"><span>Por sesión</span><b>${plan[0].ex.length} ejercicios · ${d.time} min</b></div>
+    <div class="kv"><span>Por sesión</span><b>${plan[0].ex.length} ejercicios · ~${estMinutes(plan[0])} min</b></div>
     <div class="kv"><span>Bloques</span><b>${len} semanas con descarga al final</b></div>
     <div class="kv"><span>Calorías</span><b>${es(n.kcal)} kcal al día</b></div>
     <div class="kv"><span>Proteína</span><b>${n.pg} g al día</b></div>

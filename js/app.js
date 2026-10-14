@@ -132,17 +132,53 @@ function dose(e, si, wi=weekInfo()){
   if(wi.deload) s = Math.max(1, Math.ceil(s/2));
   return {...e, s, r:sc.r, rest:sc.rest, si};
 }
+/* Grupos que no pueden faltar en la semana y dónde encajan mejor */
+const WEEK_REQ = ['triceps','biceps','lateral','hamcurl','calves'];
+const HOST = {triceps:['hpress','vpress','ipress'], biceps:['hpull','vpull'], lateral:['vpress','hpress','ipress'], hamcurl:['squat','hinge'], calves:['squat','hinge','lunge']};
+const DROP_ORDER = ['core','glute','latiso','fly','reardelt','quadext','lunge','ipress'];
+function chooseSlots(split, maxEx){
+  const sess = split.map(([type,off])=>{
+    const slots = TPL[type].slots.map((pat,si)=>({pat,si})).filter(x=>allowed(x.pat).length);
+    return {type, off, slots, chosen:slots.slice(0,maxEx)};
+  });
+  const count = p => sess.reduce((n,x)=>n+x.chosen.filter(c=>c.pat===p).length,0);
+  WEEK_REQ.forEach(pat=>{
+    if(!allowed(pat).length || count(pat)>0) return;
+    const hosts = sess.filter(x=>x.chosen.some(c=>HOST[pat].includes(c.pat)))
+      .sort((a,b)=>(b.slots.some(x=>x.pat===pat)) - (a.slots.some(x=>x.pat===pat)));
+    for(const x of hosts){
+      if(x.chosen.length < maxEx){ x.chosen.push({pat, si:(x.slots.find(y=>y.pat===pat)||{si:50+x.chosen.length}).si}); return; }
+      let best=-1, bestScore=1e9;
+      x.chosen.forEach((c,k)=>{
+        if(k<2) return;                                   // los dos básicos nunca se tocan
+        const dupSess = x.chosen.filter(y=>y.pat===c.pat).length>1;
+        let sc;
+        if(dupSess) sc=0;
+        else if(DROP_ORDER.includes(c.pat)) sc=1+DROP_ORDER.indexOf(c.pat);
+        else if(WEEK_REQ.includes(c.pat) && count(c.pat)>1) sc=20+WEEK_REQ.indexOf(c.pat);
+        else if(!WEEK_REQ.includes(c.pat) && count(c.pat)>1) sc=30;   // un básico repetido en la semana
+        else return;
+        if(sc<bestScore){ bestScore=sc; best=k; }
+      });
+      if(best>=0){ x.chosen[best]={pat, si:x.chosen[best].si}; return; }
+    }
+  });
+  const ISO = ['lateral','fly','triceps','reardelt','latiso','biceps','hamcurl','quadext','calves','glute','core'];
+  const ord = c => (ISO.includes(c.pat)?100:0) + (c.pat==='core'?100:0) + c.si;   // básicos primero, aislamiento después, abdomen al final
+  sess.forEach(x=>x.chosen.sort((a,b)=>ord(a)-ord(b)));
+  return sess;
+}
 function buildPlan(){
   const wi = weekInfo();
   const maxEx = Math.min(({45:5,60:6,75:7,90:8})[P.time] || 6, P.exp==='beg' ? 6 : 8);
   const split = splitFor(P);
   const count = {}; split.forEach(([t])=>count[t]=(count[t]||0)+1);
   const seen = {};
+  const chosen = chooseSlots(split, maxEx);
   return split.map(([type,off],idx) => {
     const T = TPL[type]; seen[type]=(seen[type]||0)+1;
     const used = new Set(), ex = [];
-    for(let si=0; si<T.slots.length && ex.length<maxEx; si++){
-      const pat = T.slots[si];
+    for(const {pat, si} of chosen[idx].chosen){
       const opts = allowed(pat).filter(e=>!used.has(e.id));
       if(!opts.length) continue;
       const isMainSlot = si<2;
